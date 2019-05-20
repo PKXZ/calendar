@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="stylesheet" href="iconfont/iconfont.css">
+  <link rel="stylesheet" href="css/css_lunar.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+  <script src="js/lunarCalendar.js"></script>
+  <title>带农历的日历</title>
+</head>
+<body>
+  <div id="calendar">
+    <div class="calendarDiv">
+      <div class="calendar_title">
+        <i class="iconfont icon-zuojiantou" @click="lastMonth"></i>
+        <span>{{year}}年{{month}}月</span>
+        <i class="iconfont icon-youjiantou" @click="nextMonth"></i>
+      </div>
+      <div class="calendar_content">
+        <!--星期-->
+        <ul>
+          <li
+                  v-for="(weeks,weIndex) in week"
+                  :key="weIndex"
+                  :class="weeks === '日' || weeks === '六' ? 'weekend' : '' ">
+            {{weeks}}
+          </li>
+        </ul>
+        <!--一周-->
+        <ul v-if="showWeek">
+          <li
+                  v-for="(wkDates,wkDaIndex) in weekDateList"
+                  :key="wkDaIndex"
+                  @click="clickDates(wkDates,wkDaIndex)">
+            <span :class="wkDates.type ? wkDates.type : '' || activedDate === wkDates.nowDate ? 'weekActived' : ''">
+                {{wkDates.date}}
+            </span>
+          </li>
+        </ul>
+        <!--日期-->
+        <ul v-if="!showWeek">
+          <li
+              v-for="(dates,daIndex) in dateList"
+              :key="daIndex"
+              @click="clickDates(dates,daIndex)">
+            <div :class="dates.type ? dates.type : dates.lunarCalendarList.isToday ? 'today' : '' || activedDate === dates.nowDate ? 'actived' : ''">
+                <span>
+                   {{dates.date}}
+                </span>
+                <span class="lunarCalendar">{{dates.lunarCalendarList.isToday ? '今天' : dates.lunarCalendarList.Term !== null && dates.lunarCalendarList.Term !== '' ? dates.lunarCalendarList.Term : dates.lunarCalendarList.IDayCn}}</span>
+            </div>
+          </li>
+        </ul>
+        <div style="clear:both;"></div>
+      </div>
+      <div class="shrinkageDiv">
+        <i class="iconfont icon-arrow-up shrinkage" :class="showWeek ? 'rotate' : ''" @click="shrinkageFun"></i>
+      </div>
+    </div>
+
+
+    <div style="text-align: center;margin-top: 10%;">
+      当前日期：{{activedDate}}<br/>{{clickItem}}
+    </div>
+  </div>
+
+  <script>
+
+    new Vue({
+        el: '#calendar',
+        data(){
+            return{
+                year: '',
+                month: '',
+                day: '',
+                times: '',//方便寻找一周日期，具体日是根据查询当天算的某年某月X日
+                week: ['日','一','二','三','四','五','六'],
+                nuberOne: '',//本月1号是星期几
+                nuberlast: '',//本月最后1天是星期几
+                dateList: [],//显示日期
+                weekDateList: [],//一周日期
+                showWeek: false,//展示一周状态
+                activedDate : '',//当前选中日期
+                clickItem: '',//当前选择对象
+            }
+        },
+        mounted(){
+            //获取当月数据
+            this.getThisMonth();
+        },
+        methods:{
+            /*
+            * @获取当前月数据
+            * @具体日期、总共多少天、1号和最后1号是星期几
+            * @组装上日期列表 组装本月日期列表 组装下月日期列表 合并数组
+            */
+            getThisMonth(dates){
+                //如果没有指定日期就查询当月的
+                let date;
+                if(dates){
+                    date = new Date(dates);
+                }else {
+                    date = new Date();
+                }
+                //获取本月具体日期
+                this.year = date.getFullYear();
+                this.month = date.getMonth() + 1 < 10 ? '0' + (date.getMonth() + 1) : date.getMonth() + 1;
+                this.day = date.getDate() < 10 ? '0' + date.getDate() : date.getDate();
+                const time = this.year + '-' + this.month + '-' + this.day;
+                this.times = time;
+                //计算本月总共有多少天
+                const thisTotalDay = new Date(this.year, this.month, 0).getDate();
+                //获取本月1号是星期几
+                const numberOne = date.setDate(1);
+                const serialOneNumber = new Date(numberOne).getDay();
+                this.nuberOne = this.week[serialOneNumber];
+                //获取本月最后1天是星期几
+                const numberLast = date.setDate(thisTotalDay);
+                const serialLastNumber = new Date(numberLast).getDay();
+                this.nuberlast = this.week[serialLastNumber];
+                //组装上日期列表
+                const lastArr = this.getLastObj(serialOneNumber);
+                //组装本月日期列表
+                const arr = this.getNowObj(thisTotalDay);
+                //组装下月日期列表
+                const nextArr = this.getNextObj(serialLastNumber);
+                //合并数组
+                this.dateList = lastArr.concat(arr,nextArr);
+                //找到本周的数据
+                let selfIndex,selfWeek;
+                for(let i = 0; i < this.dateList.length; i++){
+                    const nowDate = this.dateList[i].nowDate;
+                    const week = this.dateList[i].week;
+                    if(nowDate === this.times){
+                      selfIndex = i;
+                      selfWeek = week;
+                      break;
+                    }
+                }
+                //根据刚才取得的week序号位置，取出一个区间值 -->  ['日','一','二','三','四','五','六']
+                const weekIndex = this.week.indexOf(selfWeek);
+                const minNum = weekIndex - 0;
+                const maxNum = this.week.length - weekIndex;
+                this.weekDateList = this.dateList.slice((selfIndex - minNum),(selfIndex + maxNum));
+            },
+            /*
+            * @组装上月数据
+            * @serialOneNumber 这个月第一天星期几
+            * @setMonth()方法存在的一个BUG
+            * @拼接为 {
+                        type: 'notMonth',
+                        week: '1',//星期几
+                        date: '今',//当前日期
+                        nowDate: '2019-03-1'//具体日期,
+                        lunarCalendarList: { //农历
+                            Animal: "猪"
+                            IDayCn: "廿七"
+                            IMonthCn: "三月"
+                            Term: null
+                            astro: "金牛座"
+                            cDay: 1
+                            cMonth: 5
+                            cYear: 2019
+                            gzDay: "戊戌"
+                            gzMonth: "戊辰"
+                            gzYear: "己亥"
+                            isLeap: false
+                            isTerm: false
+                            isToday: false
+                            lDay: 27
+                            lMonth: 3
+                            lYear: 2019
+                            nWeek: 3
+                            ncWeek: "星期三"
+                        }
+                    }
+            */
+            getLastObj(serialOneNumber){
+                //虽然知道当月月份，但是涉及跨年，所以不能直接减以获取上月、下月月份
+                const time = this.times;
+                const date = new Date(time);
+                //特别注意！！！：在31号的时候，使用setMonth()方法会出问题，因此在使用setMonth()方法前，先设置日期的方式或者setMonth中填写第二个日期参数
+                //setMonth():第一个参数是月份，第二个为天数，当我们不设置后面的天数的时候，前面设置的月份，就会自动顺延
+                //setMonth()其实是设置与当前时间天数相同的月份，如果设置的月份与当前天数不相同则往后顺延一个月
+                const lastDate = date.setMonth(date.getMonth() - 1, 1);
+                const lastYear = new Date(lastDate).getFullYear();
+                const lastMonth = new Date(lastDate).getMonth() + 1 < 10 ? '0' + (new Date(lastDate).getMonth() + 1) : new Date(lastDate).getMonth() + 1;
+                //计算上月总共多少天 new Date(year, month, 0).getDate()
+                const lastTotalDay = new Date(lastYear, lastMonth, 0).getDate();
+                let lastArr = [];
+                //总共缺几天 -0是因为week从0开始
+                const lastLack = serialOneNumber - 0;
+                for(let i = 0; i < lastLack; i++){
+                    let obj = {};
+                    //计算某一天星期几
+                    const nowDate = lastYear + '-' + lastMonth + '-' +  [(lastTotalDay - i) < 10 ? '0' +  (lastTotalDay - i) :  (lastTotalDay - i)];
+                    const matchDate = new Date(Date.parse(nowDate.replace(/-/g, '/')));
+                    const week = this.week[matchDate.getDay()];
+                    obj['type'] = 'notMonth';
+                    obj['date'] = lastTotalDay - i;
+                    obj['week'] = week;
+                    obj['nowDate'] = nowDate;
+                    obj['lunarCalendarList'] =  window.calendar.solar2lunar(parseInt(lastYear),parseInt(lastMonth),parseInt([(lastTotalDay - i) < 10 ? '0' +  (lastTotalDay - i) :  (lastTotalDay - i)]));
+                    lastArr.push(obj);
+                }
+                //倒序
+                lastArr = lastArr.reverse();
+                return lastArr;
+            },
+            /*
+            * @组装下月数据
+            * @serialLastNumber 这个月最后一天星期几
+            * @拼接为 {
+                        type: 'notMonth',
+                        week: '1',//星期几
+                        date: '今',//当前日期
+                        nowDate: '2019-05-1'//具体日期,
+                        lunarCalendarList: { //农历
+                            Animal: "猪"
+                            IDayCn: "廿七"
+                            IMonthCn: "三月"
+                            Term: null
+                            astro: "金牛座"
+                            cDay: 1
+                            cMonth: 5
+                            cYear: 2019
+                            gzDay: "戊戌"
+                            gzMonth: "戊辰"
+                            gzYear: "己亥"
+                            isLeap: false
+                            isTerm: false
+                            isToday: false
+                            lDay: 27
+                            lMonth: 3
+                            lYear: 2019
+                            nWeek: 3
+                            ncWeek: "星期三"
+                        }
+                    }
+            */
+            getNextObj(serialLastNumber){
+                //虽然知道当月月份，但是涉及跨年，所以不能直接减以获取上月、下月月份
+                const time = this.times;
+                const date = new Date(time);
+                const nextDate = date.setMonth(date.getMonth() + 1);
+                const nextYear = new Date(nextDate).getFullYear();
+                const nextMonth = new Date(nextDate).getMonth() + 1 < 10 ? '0' + (new Date(nextDate).getMonth() + 1) : new Date(nextDate).getMonth() + 1;
+                let nextArr = [];
+                //总共缺几天
+                const nextLack = this.week.length - serialLastNumber;
+                for(let i = 1; i < nextLack; i++){
+                    let obj = {};
+                    //计算某一天星期几
+                    const nowDate = nextYear + '-' + nextMonth + '-' + (i < 10 ? '0' + i : i);
+                    const matchDate = new Date(Date.parse(nowDate.replace(/-/g, '/')));
+                    const week = this.week[matchDate.getDay()];
+                    obj['type'] = 'notMonth';
+                    obj['date'] = i;
+                    obj['week'] = week;
+                    obj['nowDate'] = nowDate;
+                    obj['lunarCalendarList'] =  window.calendar.solar2lunar(parseInt(nextYear),parseInt(nextMonth),parseInt(i < 10 ? '0' + i : i));
+                    nextArr.push(obj);
+                }
+                return nextArr;
+            },
+            /*
+            * @计算当月日期列表
+            * @serialOneNumber 这个月第一天星期几
+            * @thisTotalDay 本月总共多少天
+            * 处理特殊情况: 今天
+            * @拼接为 {
+                        type: '',//类型 today actived
+                        week: '1',//星期几
+                        date: '今',//当前日期
+                        nowDate: '2019-04-1'//具体日期,
+                        lunarCalendarList: { //农历
+                            Animal: "猪"
+                            IDayCn: "廿七"
+                            IMonthCn: "三月"
+                            Term: null
+                            astro: "金牛座"
+                            cDay: 1
+                            cMonth: 5
+                            cYear: 2019
+                            gzDay: "戊戌"
+                            gzMonth: "戊辰"
+                            gzYear: "己亥"
+                            isLeap: false
+                            isTerm: false
+                            isToday: false
+                            lDay: 27
+                            lMonth: 3
+                            lYear: 2019
+                            nWeek: 3
+                            ncWeek: "星期三"
+                        }
+                    }
+            */
+            getNowObj(thisTotalDay){
+                let arr = [];
+                //X号星期几->起始是1号
+                const zsDate = new Date();
+                const zsYear = zsDate.getFullYear();
+                const zsMonth = zsDate.getMonth() + 1 < 10 ? '0' + (zsDate.getMonth() + 1) : zsDate.getMonth() + 1;
+                const zsDay = zsDate.getDate() < 10 ? '0' + (zsDate.getDate()) : zsDate.getDate();
+                const nowDate = zsYear + '-' + zsMonth + '-' + zsDay;//真实日期
+                for(let i = 1; i <= thisTotalDay; i++){
+                    let obj = {};
+                    const thisDate = this.year + '-' + this.month + '-' + (i < 10 ? '0' + i : i);//当前显示日期
+                    const matchDate = new Date(Date.parse(thisDate.replace(/-/g, '/')));
+                    const week = this.week[matchDate.getDay()];
+                    obj['week'] = week;
+                    obj['nowDate'] = thisDate;
+                    //如果是今天特殊处理
+                    // if(nowDate === thisDate){
+                    //   obj['type'] = 'today';
+                    //   obj['date'] = '今';
+                    // }else{
+                    //   obj['type'] = '';
+                    //   obj['date'] = i;
+                    // }
+                    obj['type'] = '';
+                    obj['date'] = i;
+                    obj['lunarCalendarList'] =  window.calendar.solar2lunar(parseInt(this.year),parseInt(this.month),parseInt(i < 10 ? '0' + i : i));
+                    arr.push(obj);
+                }
+                return arr;
+            },
+            /*
+            * @获取农历年
+            * */
+            gteLunarCalendar(){
+
+            },
+          /*
+          * @日期点击事件
+          * @点击灰色数字，跳转到相应月份并且选中
+          */
+            clickDates(item,index){
+              this.activedDate = item.nowDate;
+              this.clickItem = item;
+              if(item.type === 'notMonth'){
+                  const dates = new Date(item.nowDate);
+                  this.getThisMonth(dates);
+              }
+            },
+            /*
+            * @上一个月
+            */
+            lastMonth(){
+                const nowDate = this.times;
+                const date = new Date(nowDate);
+                const lastDate = date.setMonth(date.getMonth() - 1);
+                const lastYear = new Date(lastDate).getFullYear();
+                const lastMonth = new Date(lastDate).getMonth() + 1 < 10 ? '0' + (new Date(lastDate).getMonth() + 1) : new Date(lastDate).getMonth() + 1;
+                const lastDay = new Date(lastDate).getDate();
+                const lastDatas = lastYear + '-' + lastMonth + '-' + lastDay;
+                this.getThisMonth(lastDatas);
+            },
+            /*
+            * @下一个月
+            */
+            nextMonth(){
+                const nowDate = this.times;
+                const date = new Date(nowDate);
+                const nextDate = date.setMonth(date.getMonth() + 1);
+                const nextYear = new Date(nextDate).getFullYear();
+                const nextMonth = new Date(nextDate).getMonth() + 1 < 10 ? '0' + (new Date(nextDate).getMonth() + 1) : new Date(nextDate).getMonth() + 1;
+                const nextDay = new Date(nextDate).getDate();
+                const nextDatas = nextYear + '-' + nextMonth + '-' + nextDay;
+                this.getThisMonth(nextDatas);
+            },
+            /*
+            * @ 展示一周还是展示全月
+            * */
+            shrinkageFun(){
+               if(this.showWeek){
+                  this.showWeek = false;
+               }else {
+                  this.showWeek = true;
+               }
+            }
+        }
+    })
+  </script>
+</body>
+</html>
